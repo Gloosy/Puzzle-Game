@@ -77,5 +77,4 @@ if solution:
 else:
     print("\n\nNo solution found.")
 
-#print (breadth_first_search)
-print(find_empty)
+print (breadth_first_search)
