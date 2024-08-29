@@ -11,11 +11,14 @@ class SlidingPuzzle:
         self.goal_state = list(range(1, self.size * self.size)) + [None]
         self.tiles = self.goal_state[:]
         self.grid_buttons = []
+        self.is_paused = False
+        self.current_solution = None  # To store the current solution
+        self.current_step_index = 0  # To store the current step in the solution
         
         self.create_grid()
         self.shuffle_tiles()
 
-        # Buttons for Auto-Solving
+        # Buttons for Auto-Solving and Control
         self.bfs_button = tk.Button(self.root, text="Solve with BFS", command=self.solve_bfs)
         self.bfs_button.grid(row=self.size, column=0)
 
@@ -24,6 +27,12 @@ class SlidingPuzzle:
 
         self.astar_button = tk.Button(self.root, text="Solve with A*", command=self.solve_astar)
         self.astar_button.grid(row=self.size, column=2)
+
+        self.refresh_button = tk.Button(self.root, text="Refresh", command=self.refresh_puzzle)
+        self.refresh_button.grid(row=self.size + 1, column=0)
+
+        self.pause_button = tk.Button(self.root, text="Pause", command=self.toggle_pause)
+        self.pause_button.grid(row=self.size + 1, column=1)
 
     def create_grid(self):
         frame = tk.Frame(self.root)
@@ -44,6 +53,20 @@ class SlidingPuzzle:
         while not self.is_solvable():
             random.shuffle(self.tiles)
         self.update_grid()
+
+    def refresh_puzzle(self):
+        """Refresh the puzzle by reshuffling the tiles."""
+        self.shuffle_tiles()
+
+    def toggle_pause(self):
+        """Toggle between pausing and resuming the auto-solver."""
+        if self.is_paused:
+            self.is_paused = False
+            self.pause_button.config(text="Pause")
+            self.play_solution(self.current_solution, self.current_step_index)  # Resume solving
+        else:
+            self.is_paused = True
+            self.pause_button.config(text="Resume")
 
     def update_grid(self):
         for row in range(self.size):
@@ -105,6 +128,7 @@ class SlidingPuzzle:
             state, path = frontier.get()
 
             if state == self.goal_state:
+                self.current_solution = path
                 self.play_solution(path)
                 return
 
@@ -129,6 +153,7 @@ class SlidingPuzzle:
             state, path = frontier.get()
 
             if state == self.goal_state:
+                self.current_solution = path
                 self.play_solution(path)
                 return
 
@@ -148,19 +173,20 @@ class SlidingPuzzle:
         def manhattan_distance(state):
             distance = 0
             for i, tile in enumerate(state):
-                if tile is None:
+                if tile is None:  # Skip the empty tile
                     continue
                 correct_row, correct_col = divmod(tile - 1, self.size)
                 current_row, current_col = divmod(i, self.size)
                 distance += abs(correct_row - current_row) + abs(correct_col - current_col)
             return distance
 
+        # PriorityQueue stores tuples of (priority, g(n), state, path)
         frontier = PriorityQueue()
-        frontier.put((manhattan_distance(initial_state), initial_state, []))
+        frontier.put((manhattan_distance(initial_state), 0, initial_state, []))
         explored = set()
 
         while not frontier.empty():
-            _, state, path = frontier.get()
+            _, cost_so_far, state, path = frontier.get()
 
             if state == self.goal_state:
                 self.play_solution(path)
@@ -170,20 +196,28 @@ class SlidingPuzzle:
 
             for neighbor in self.find_neighbors(state):
                 if tuple(neighbor) not in explored:
-                    frontier.put((manhattan_distance(neighbor), neighbor, path + [neighbor]))
+                    # Calculate g(n) (cost so far) and f(n) (total cost: g(n) + h(n))
+                    new_cost = cost_so_far + 1
+                    priority = new_cost + manhattan_distance(neighbor)
+                    frontier.put((priority, new_cost, neighbor, path + [neighbor]))
                     explored.add(tuple(neighbor))
 
-    def play_solution(self, solution):
-        if not solution:
+
+    def play_solution(self, solution, step_index=0):
+        """Play the solution step by step, considering pause functionality."""
+        self.current_solution = solution
+        self.current_step_index = step_index
+        
+        if not solution or self.is_paused:
             return
 
         def play_step(step_index):
-            if step_index < len(solution):
+            if step_index < len(solution) and not self.is_paused:
                 self.tiles = solution[step_index]
                 self.update_grid()
                 self.root.after(200, lambda: play_step(step_index + 1))
 
-        play_step(0)
+        play_step(step_index)
 
 if __name__ == "__main__":
     root = tk.Tk()
